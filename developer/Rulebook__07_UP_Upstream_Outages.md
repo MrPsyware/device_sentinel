@@ -17,11 +17,12 @@ What happens when something between a device and Home Assistant stops: the MQTT 
 ### UP-02 Watching the Broker
 
 **Device Sentinel watches the MQTT broker itself, because nothing else can see it fail.** While the broker is down, no bridge event is written.
+- **Uptime source:** Mosquitto uses `$SYS/broker/uptime`. Setting EMQX Node Name under Advanced switches to `$SYS/brokers/<node>/uptime` for the specified node. Both feed the same outage detector.
 - **A restart:** seen when the broker's reported start time moves forward by more than 30 seconds, so two restarts inside 30 seconds read as one. A restart's outage runs from the last message before it to the first after it, never from the broker's previous start.
 - **A broker that dies while Home Assistant runs:** seen by silence past six times its own learned publish interval, with a floor of 30 seconds.
 - **At the minute check:** a broker restart since the last minute check is told as Home Assistant stops, with its length.
 - **Inside a Home Assistant restart:** a broker restart inside Device Sentinel's own unwatched gap is the restart. The restart's row covers it, and no broker row is written.
-- **The sensor:** Broker: MQTT reads running, down or unknown, and says when the broker last started. It reads unknown until it first hears the broker.
+- **The sensor:** Broker: MQTT reads running, down or unknown, and says when the broker last started. It reads unknown until two valid uptime messages establish a publish interval.
 - **When the sensor is on:** on by default where Device Sentinel found any stack, ZHA and Z-Wave included, and off otherwise. So a house on ZHA alone has a broker sensor that reads unknown.
 - **Silent for a whole run:** a broker heard in an earlier run that says nothing for a whole run past the startup grace is down from the start of that run. One never heard is left alone.
 

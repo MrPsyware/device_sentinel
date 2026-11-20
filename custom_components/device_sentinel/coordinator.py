@@ -184,6 +184,8 @@ from .const import (
     CONF_UNAVAILABLE_MUTED_DEVICES,
     CONF_MAINTENANCE_MINUTES,
     CONF_SIGNAL_MUTED_DEVICES,
+    CONF_EMQX_NODE,
+    CONF_Z2M_BASE_TOPIC,
     DAILY_MAX_KEEP,
     DATA_BRIDGE_SEEN,
     DATA_ROUTERS_SEEN,
@@ -6707,6 +6709,12 @@ class DeviceSentinelCoordinator(
         # (rule CFG-10).
         await self._apply_trim_selection(after)
         self._rebuild_registry_view()
+        if before.get(CONF_Z2M_BASE_TOPIC) != after.get(CONF_Z2M_BASE_TOPIC):
+            await self._start_bridge_readers(reconfigure=True)
+        if before.get(CONF_EMQX_NODE) != after.get(CONF_EMQX_NODE):
+            await self._start_broker_reader()
+        if self._stopped:
+            return
         moved = sorted(
             key
             for key in set(before) | set(after)

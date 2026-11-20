@@ -21,6 +21,7 @@ from homeassistant.core import HomeAssistant
 
 from custom_components.device_sentinel.const import (
     CONF_BRIEF_TARGETS,
+    CONF_EMQX_NODE,
     CONF_HIGH_PRIORITY_TARGETS,
     CONF_NORMAL_PRIORITY_TARGETS,
     CONF_WIFI_NETWORKS,
@@ -80,6 +81,15 @@ async def test_notify_targets_are_redacted(hass: HomeAssistant):
     text = await _download(hass, entry)
     for leak in ("james_iphone", "james_lander_gmail_com", "randy_example_org"):
         assert leak not in text, leak
+
+
+async def test_the_emqx_node_name_is_redacted(hass: HomeAssistant):
+    node = "emqx@private-broker.home"
+    entry = await setup_entry(hass, {CONF_EMQX_NODE: node})
+    assert node in entry.runtime_data.broker_attributes["topic"]
+    text = await _download(hass, entry)
+    assert node not in text
+    assert "$SYS/brokers/<node>/uptime" in text
 
 
 def test_credentials_in_a_web_address_are_redacted():

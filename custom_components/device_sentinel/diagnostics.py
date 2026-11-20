@@ -56,7 +56,9 @@ from .const import (
     DATA_EXPECTED_OUTAGES,
     DATA_SHORT_DROP_DAYS,
     DATA_SHORT_DROPS,
+    ATTR_BROKER_TOPIC,
     BROKER_SCOPE,
+    CONF_EMQX_NODE,
     INFRASTRUCTURE_DEVICE_CAP,
     LOGGER,
     REPORT_DIR,
@@ -132,6 +134,7 @@ from .stand_ins import (
 # download is often attached to a public issue.
 TO_REDACT = {
     CONF_BRIEF_TARGETS,
+    CONF_EMQX_NODE,
     CONF_HIGH_PRIORITY_TARGETS,
     CONF_NORMAL_PRIORITY_TARGETS,
     # A house's Wi-Fi names, which public maps of networks can place
@@ -811,6 +814,9 @@ async def _learned_state(
         if isinstance(cold_at, (int, float)) and isinstance(hot_at, (int, float))
         else None
     )
+    broker = coordinator.broker_attributes
+    if broker[ATTR_BROKER_TOPIC].startswith("$SYS/brokers/"):
+        broker[ATTR_BROKER_TOPIC] = "$SYS/brokers/<node>/uptime"
     payload = {
         "version": coordinator.version,
         "entry_options": async_redact_data(dict(entry.options), TO_REDACT),
@@ -933,7 +939,7 @@ async def _learned_state(
             "smartthings": await _studied(
                 lambda: coordinator.stack_diagnostics(SMARTTHINGS_DOMAIN)
             ),
-            "broker": coordinator.broker_attributes,
+            "broker": broker,
             # Each detected bridge's current state (running, binding,
             # down, unknown), so a gap discarded as a pairing is
             # auditable from a diagnostics download and not only from

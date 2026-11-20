@@ -152,9 +152,11 @@ def device_key(device: dr.DeviceEntry) -> str | None:
     return None
 
 
-def make_reader(hass: HomeAssistant) -> Z2MBridgeReader:
+def make_reader(
+    hass: HomeAssistant, base_topic: str = Z2M_BASE_TOPIC_DEFAULT
+) -> Z2MBridgeReader:
     """Return a reader for this stack's bridge."""
-    return Z2MBridgeReader(hass)
+    return Z2MBridgeReader(hass, base_topic)
 
 
 def is_bridge_device(device: dr.DeviceEntry) -> bool:

@@ -62,6 +62,8 @@ from .notifier import notify_platform
 from .wifi import scan_networks, wireless_interfaces
 
 from .const import (
+    CONF_EMQX_NODE,
+    CONF_Z2M_BASE_TOPIC,
     CONF_UNAVAILABLE_MUTED_LABELS,
     SMTP_DOMAIN,
     SMTP_TARGET_PREFIX,
@@ -2272,6 +2274,7 @@ class DeviceSentinelOptionsFlow(OptionsFlow):
         can produce a nonsensical result. One sentence each on the
         screen and the reasoning on the wiki page (rule CFG-03).
         """
+        errors: dict[str, str] = {}
         if user_input is not None:
             # The trim pair arrives nested under its section, and the
             # stored keys stay flat: the trim options are read by the
@@ -2289,8 +2292,23 @@ class DeviceSentinelOptionsFlow(OptionsFlow):
             ticked = flat.pop(CONF_CACHED_INTEGRATIONS, None)
             if ticked is not None:
                 flat.update(self._cached_changes(set(ticked)))
-            return await self._save_and_return(flat)
-        options = self.config_entry.options
+            if CONF_Z2M_BASE_TOPIC in flat:
+                topic = flat[CONF_Z2M_BASE_TOPIC].strip()
+                if any(char in topic for char in ("#", "+", "\0", "\n", "\r")):
+                    errors[CONF_Z2M_BASE_TOPIC] = "invalid_mqtt_topic"
+                flat[CONF_Z2M_BASE_TOPIC] = topic
+            if CONF_EMQX_NODE in flat:
+                node = flat[CONF_EMQX_NODE].strip()
+                name, _, host = node.partition("@")
+                if node and (
+                    not name or not host or "@" in host or not node.isprintable()
+                    or any(char.isspace() or char in "/+#" for char in node)
+                ):
+                    errors[CONF_EMQX_NODE] = "invalid_emqx_node"
+                flat[CONF_EMQX_NODE] = node
+            if not errors:
+                return await self._save_and_return(flat)
+        options = {**self.config_entry.options, **(user_input or {})}
         cached_rows = self.config_entry.runtime_data.restart_settings_rows()
         cached_now = self.config_entry.runtime_data.cached_integrations()
         # The trim pickers offer everything the integration knows,
@@ -2322,6 +2340,7 @@ class DeviceSentinelOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="advanced",
             description_placeholders={"wiki_link": WIKI_LINK_ADVANCED},
+            errors=errors,
             data_schema=vol.Schema(
                 {
                     # The dashboard each window opens in (rule DASH-03).
@@ -2396,6 +2415,14 @@ class DeviceSentinelOptionsFlow(OptionsFlow):
                             mode=selector.NumberSelectorMode.SLIDER,
                         )
                     ),
+                    vol.Optional(
+                        CONF_Z2M_BASE_TOPIC,
+                        default=options.get(CONF_Z2M_BASE_TOPIC, ""),
+                    ): selector.TextSelector(),
+                    vol.Optional(
+                        CONF_EMQX_NODE,
+                        default=options.get(CONF_EMQX_NODE, ""),
+                    ): selector.TextSelector(),
                     # The integrations that report cached values after
                     # a restart (rule WATCH-12): those on this system,
                     # ours ticked, each naming the models set on their

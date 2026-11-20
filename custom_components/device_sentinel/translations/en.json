@@ -213,6 +213,8 @@
           "storage_write_minutes": "Storage Write Interval",
           "history_days": "How Much History to Keep",
           "maintenance_minutes": "Maintenance Window in Minutes",
+          "z2m_base_topic": "Zigbee2MQTT Base Topic",
+          "emqx_node": "EMQX Node Name",
           "cached_integrations": "Integrations That Report Cached Values"
         },
         "data_description": {
@@ -221,6 +223,8 @@
           "storage_write_minutes": "The amount of time routine activity is held in memory before it is written to disk. Set longer for slower hardware and hubs writing data to an SD card. Longer risks losing timer data should your system suffer a power loss. Events are written when they happen, so risk is minimal.",
           "history_days": "How many days of daily battery, signal, and unavailable and freeze gap records are kept for studying long trends. 30 days is necessary, but some trends can only be seen with longer time periods.",
           "maintenance_minutes": "How long the Maintenance Mode button declares you at work on the hardware. A device that recovers inside the window is treated as your fix, and its silence is not learned as normal.",
+          "z2m_base_topic": "Use the value of mqtt.base_topic from Zigbee2MQTT, such as zigbee2mqtt2. Leave blank to use zigbee2mqtt.",
+          "emqx_node": "Enter the EMQX node name, such as emqx@192.168.1.10. Home Assistant’s MQTT account needs permission to subscribe to the node’s uptime topic. Leave blank for Mosquitto.",
           "cached_integrations": "After a restart, these integrations can report a device's last values before the device has had a chance to wake and speak, so a device that was down is not treated as back until one of its values changes. Untick an integration only if you're sure its devices report live. If you tick one by mistake, a working device that was down during a restart could remain listed as down. Each device's make and model can be set on its device detail page."
         },
         "sections": {
@@ -264,6 +268,8 @@
       }
     },
     "error": {
+      "invalid_emqx_node": "Enter an EMQX node name in name@host format.",
+      "invalid_mqtt_topic": "Enter a single MQTT base topic without wildcards or line breaks.",
       "internal_url_not_set": "Home Assistant has no internal URL, so nothing would be linked. Set one under Settings, System, Network, or choose None.",
       "external_url_not_set": "Home Assistant has no external URL, so nothing would be linked. Set one under Settings, System, Network, or choose None.",
       "priority_target_is_address": "High-Priority Targets and Normal-Priority Targets need a notify action, such as your phone's Companion app, not an email address. Choose them from the list.",

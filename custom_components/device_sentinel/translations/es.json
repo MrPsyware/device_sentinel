@@ -211,6 +211,8 @@
           "storage_write_minutes": "Intervalo de escritura en disco",
           "history_days": "Cuánto historial conservar",
           "maintenance_minutes": "Ventana de mantenimiento en minutos",
+          "z2m_base_topic": "Tema base de Zigbee2MQTT",
+          "emqx_node": "Nombre del nodo EMQX",
           "cached_integrations": "Integraciones que devuelven valores en caché"
         },
         "data_description": {
@@ -219,6 +221,8 @@
           "storage_write_minutes": "El tiempo que la actividad habitual se guarda en memoria antes de escribirse en disco. Ponlo más largo en hardware lento y en equipos que escriben en una tarjeta SD. Un valor más largo puede hacer perder datos de los temporizadores si tu sistema sufre un corte de luz. Los eventos se escriben en el momento en que ocurren, así que el riesgo es mínimo.",
           "history_days": "Cuántos días de registros diarios de batería, señal y pausas de «no disponible» y «congelado» se conservan para estudiar tendencias largas. 30 días son necesarios, pero algunas tendencias solo se ven con periodos más largos.",
           "maintenance_minutes": "Cuánto tiempo el botón Modo mantenimiento declara que estás trabajando en el hardware. Un dispositivo que se recupera dentro de la ventana se toma como tu arreglo, y su silencio no se aprende como normal.",
+          "z2m_base_topic": "Usa el valor de mqtt.base_topic de Zigbee2MQTT, como zigbee2mqtt2. Déjalo en blanco para usar zigbee2mqtt.",
+          "emqx_node": "Introduce el nombre del nodo EMQX, como emqx@192.168.1.10. La cuenta MQTT de Home Assistant necesita permiso para suscribirse al tema de tiempo de actividad del nodo. Déjalo en blanco para Mosquitto.",
           "cached_integrations": "Tras un reinicio, estas integraciones pueden devolver los últimos valores de un dispositivo antes de que el dispositivo haya podido despertar y comunicarse, así que un dispositivo que estaba caído no se considera recuperado hasta que cambie uno de sus valores. Desmarca una integración solo si estás seguro de que sus dispositivos informan en directo. Si marcas una por error, un dispositivo que funciona y que estaba caído durante un reinicio podría seguir apareciendo como caído. La marca y el modelo de cada dispositivo se pueden ajustar en su página de detalle."
         },
         "sections": {
@@ -262,6 +266,8 @@
       }
     },
     "error": {
+      "invalid_emqx_node": "Introduce un nombre de nodo EMQX con el formato nombre@host.",
+      "invalid_mqtt_topic": "Introduce un único tema base MQTT sin comodines ni saltos de línea.",
       "internal_url_not_set": "Home Assistant no tiene URL interna, así que no se enlazaría nada. Define una en Ajustes, Sistema, Red, o elige None.",
       "external_url_not_set": "Home Assistant no tiene URL externa, así que no se enlazaría nada. Define una en Ajustes, Sistema, Red, o elige None.",
       "priority_target_is_address": "Los destinatarios de prioridad alta y de prioridad normal tienen que ser una acción de notificación, como la aplicación Companion de tu teléfono, no una dirección de correo. Elígelos de la lista.",

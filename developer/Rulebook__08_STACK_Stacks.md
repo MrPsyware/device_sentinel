@@ -25,7 +25,7 @@ What Device Sentinel knows about each radio stack and hub a house runs, and what
 
 ### STACK-03 Zigbee2MQTT
 
-**Device Sentinel reads Zigbee2MQTT's bridge from its own retained topics under the base topic zigbee2mqtt.**
+**Device Sentinel reads Zigbee2MQTT's bridge from its retained topics. The default base topic is `zigbee2mqtt`. For a custom prefix, set Zigbee2MQTT Base Topic under Advanced.**
 - **MQTT is optional:** MQTT is a soft dependency, so a house without it still loads. The reader asks whether MQTT is loaded before it waits for it.
 - **Bridge sensor:** each detected stack that has a reader, Zigbee2MQTT and ZHA, gets a Bridge sensor that reads running, binding, down or unknown. It is switched on at install, since it exists only where its stack was found (see [CFG](Rulebook__17_CFG_Settings.md)). Z-Wave and Matter are detected but have no reader and no Bridge sensor. Detection works whether or not the sensor is on.
 - **Availability setting:** the sensor shows whether Zigbee2MQTT's availability setting is on, and Device Sentinel never changes it. Where it is off, a line on the Recommendations tab says what turning it on gives.

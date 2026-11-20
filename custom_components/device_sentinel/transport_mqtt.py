@@ -36,6 +36,7 @@ nothing. Every consumer reads unknown as no opinion.
 
 from __future__ import annotations
 
+import re
 import statistics
 from typing import Any
 
@@ -61,14 +62,18 @@ from .const import (
 # arrival cannot move it, short enough that a broker whose interval
 # is changed is followed within a couple of minutes.
 _CADENCE_SAMPLES = 12
+_EMQX_DURATION = re.compile(
+    r"(?:(\d+) days, )?(?:(\d+) hours, )?(?:(\d+) minutes, )?(\d+) seconds"
+)
 
 
 class MQTTBrokerReader:
     """Hold the broker's liveness, read from its own uptime topic."""
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: HomeAssistant, *, emqx_node: str = "") -> None:
         """Prepare the reader. Nothing is subscribed until start."""
         self._hass = hass
+        self._emqx_node = emqx_node
         self._unsubs: list[Any] = []
         self._uptime: float | None = None
         self._stopped_at: float | None = None
@@ -77,6 +82,13 @@ class MQTTBrokerReader:
         self._intervals: list[float] = []
         self._arrivals = 0
         self._started_at: float | None = None
+
+    @property
+    def topic(self) -> str:
+        """Return the uptime topic for the configured broker."""
+        if self._emqx_node:
+            return f"$SYS/brokers/{self._emqx_node}/uptime"
+        return BROKER_TOPIC_UPTIME
 
     async def async_start(self) -> bool:
         """Subscribe to the uptime topic. Never raises.
@@ -108,14 +120,14 @@ class MQTTBrokerReader:
                 return False
             self._unsubs.append(
                 await mqtt.async_subscribe(
-                    self._hass, BROKER_TOPIC_UPTIME, self._on_uptime
+                    self._hass, self.topic, self._on_uptime
                 )
             )
         except Exception as err:  # noqa: BLE001 - a reader never raises up
             LOGGER.debug(
                 "Device Sentinel: could not watch %s, so the broker "
                 "state stays unknown (%s)",
-                BROKER_TOPIC_UPTIME,
+                self.topic,
                 err,
             )
             return False
@@ -207,7 +219,7 @@ class MQTTBrokerReader:
     @callback
     def _on_uptime(self, msg: mqtt.ReceiveMessage) -> None:
         """Record one arrival and learn the cadence from it."""
-        seconds = _uptime_seconds(msg.payload)
+        seconds = _uptime_seconds(msg.payload, emqx=bool(self._emqx_node))
         if seconds is None:
             return
         now = dt_util.utcnow()
@@ -257,26 +269,24 @@ class MQTTBrokerReader:
         )
 
 
-def _uptime_seconds(payload: Any) -> float | None:
-    """Return the seconds out of a payload like "12355 seconds".
-
-    The wording is Mosquitto's and is not a contract, so the number is
-    taken as the first token and anything else is refused rather than
-    guessed at. A broker that publishes something else here leaves the
-    watch unarmed, which is the correct outcome for a reader that
-    cannot read its source.
-    """
+def _uptime_seconds(payload: Any, *, emqx: bool = False) -> float | None:
+    """Read Mosquitto seconds, EMQX milliseconds, or an EMQX 4.x duration."""
     if payload is None:
         return None
     if isinstance(payload, bytes):
         text = payload.decode("utf-8", "ignore")
     else:
         text = str(payload)
-    token = text.strip().split(" ")[0] if text.strip() else ""
-    try:
-        value = float(token)
-    except ValueError:
-        return None
+    text = text.strip()
+    duration = _EMQX_DURATION.fullmatch(text) if emqx else None
+    if duration is not None:
+        days, hours, minutes, seconds = (float(part or 0) for part in duration.groups())
+        value = days * 86400 + hours * 3600 + minutes * 60 + seconds
+    else:
+        try:
+            value = float(text) / 1000 if emqx else float(text.split(" ")[0])
+        except ValueError:
+            return None
     # Finite and not absurd. An infinity would put the broker's start
     # before the epoch, which every consumer would read as a restart that
     # never happened.

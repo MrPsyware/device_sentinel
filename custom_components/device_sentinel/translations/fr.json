@@ -210,14 +210,18 @@
           "repeat_floor": "Seuil de récidive",
           "storage_write_minutes": "Intervalle d'écriture du stockage",
           "history_days": "Durée d'historique conservée",
-          "maintenance_minutes": "Fenêtre de maintenance (minutes)"
+          "maintenance_minutes": "Fenêtre de maintenance (minutes)",
+          "z2m_base_topic": "Topic de base de Zigbee2MQTT",
+          "emqx_node": "Nom du nœud EMQX"
         },
         "data_description": {
           "dashboard_mode": "Le mode dans lequel le tableau de bord s'ouvre dans chaque fenêtre. Simple montre ce qui est en panne et quoi faire ; Avancé ajoute les tendances, les graphiques et la configuration. Le sélecteur du tableau de bord le change jusqu'à ce que vous quittiez le tableau de bord.",
           "repeat_floor": "Nombre d'interruptions inexpliquées en une semaine qui fait apparaître un appareil dans la section Repeat Offenders du bilan quotidien. Une interruption est inexpliquée quand aucun redémarrage, panne, rechargement ou fenêtre d'appairage ne l'explique. Plus bas, les appareils sont cités plus tôt ; plus haut, on attend un schéma plus net.",
           "storage_write_minutes": "Durée pendant laquelle l'activité courante est gardée en mémoire avant d'être écrite sur le disque. Augmentez-la pour du matériel lent et les box qui écrivent sur une carte SD. Une valeur plus longue risque de faire perdre des données de minuterie en cas de coupure de courant. Les événements sont écrits au moment où ils se produisent, le risque est donc minime.",
           "history_days": "Nombre de jours d'historique quotidien (batterie, signal, interruptions « indisponible » et « figé ») conservés pour étudier les tendances longues. 30 jours sont nécessaires, mais certaines tendances n'apparaissent que sur des périodes plus longues.",
-          "maintenance_minutes": "Durée pendant laquelle le bouton Mode maintenance indique que vous travaillez sur le matériel. Un appareil qui revient pendant cette fenêtre est considéré comme réparé par vous, et son silence n'est pas appris comme normal."
+          "maintenance_minutes": "Durée pendant laquelle le bouton Mode maintenance indique que vous travaillez sur le matériel. Un appareil qui revient pendant cette fenêtre est considéré comme réparé par vous, et son silence n'est pas appris comme normal.",
+          "z2m_base_topic": "Utilisez la valeur de mqtt.base_topic dans Zigbee2MQTT, par exemple zigbee2mqtt2. Laissez ce champ vide pour utiliser zigbee2mqtt.",
+          "emqx_node": "Saisissez le nom du nœud EMQX, par exemple emqx@192.168.1.10. Le compte MQTT de Home Assistant doit être autorisé à s’abonner au topic de temps de fonctionnement du nœud. Laissez le champ vide pour Mosquitto."
         },
         "sections": {
           "data_trim": {
@@ -260,6 +264,8 @@
       }
     },
     "error": {
+      "invalid_emqx_node": "Saisissez un nom de nœud EMQX au format nom@hôte.",
+      "invalid_mqtt_topic": "Saisissez un seul topic de base MQTT sans caractères génériques ni sauts de ligne.",
       "internal_url_not_set": "Home Assistant n'a pas d'URL interne, aucun lien ne serait donc créé. Définissez-en une dans Paramètres, Système, Réseau, ou choisissez None.",
       "external_url_not_set": "Home Assistant n'a pas d'URL externe, aucun lien ne serait donc créé. Définissez-en une dans Paramètres, Système, Réseau, ou choisissez None.",
       "priority_target_is_address": "Les destinataires haute priorité et priorité normale doivent être une action de notification, comme l'application Companion de votre téléphone, et non une adresse e-mail. Choisissez-les dans la liste.",

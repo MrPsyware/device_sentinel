@@ -21,8 +21,12 @@ from __future__ import annotations
 
 import json
 import pathlib
+from types import SimpleNamespace
+
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr
 
@@ -36,7 +40,10 @@ from custom_components.device_sentinel.const import (
     CONF_MUTED_LABELS,
     CONF_EXCLUDED_INTEGRATIONS,
     CONF_LOW_THRESHOLD,
+    CONF_Z2M_BASE_TOPIC,
+    STACK_Z2M,
 )
+from custom_components.device_sentinel import stack_z2m
 
 from .helpers import register_device, setup_entry
 
@@ -415,3 +422,51 @@ async def test_maintenance_window_sits_above_the_data_trim_section(hass: HomeAss
     names = [str(key) for key in result["data_schema"].schema]
     assert names[-1] == "data_trim"
     assert names.index(CONF_MAINTENANCE_MINUTES) < names.index("data_trim")
+
+
+async def test_zigbee2mqtt_base_topic_can_be_changed_and_cleared(hass, monkeypatch):
+    """The saved topic drives the real bridge reader at setup and after a save."""
+    source = MockConfigEntry(domain="mqtt", title="MQTT")
+    source.add_to_hass(hass)
+    source.mock_state(hass, ConfigEntryState.LOADED)
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=source.entry_id,
+        identifiers={("mqtt", "zigbee2mqtt_bridge")},
+        name="Zigbee2MQTT Bridge",
+    )
+    subscribed = {}
+
+    async def wait_for_mqtt_client(_hass):
+        return True
+
+    async def subscribe(_hass, topic, receive):
+        subscribed[topic] = receive
+        return lambda: subscribed.pop(topic)
+
+    monkeypatch.setattr(stack_z2m.mqtt, "async_wait_for_mqtt_client", wait_for_mqtt_client)
+    monkeypatch.setattr(stack_z2m.mqtt, "async_subscribe", subscribe)
+    entry = await setup_entry(hass, {CONF_Z2M_BASE_TOPIC: "zigbee2mqtt2"})
+    coordinator = entry.runtime_data
+    assert coordinator.bridge_reader(STACK_Z2M).base_topic == "zigbee2mqtt2"
+    state_topic = "zigbee2mqtt2/bridge/state"
+    subscribed[state_topic](SimpleNamespace(payload='{"state":"online"}'))
+    assert coordinator.bridge_reader(STACK_Z2M).state == "running"
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    flow_id = result["flow_id"]
+    await hass.config_entries.options.async_configure(flow_id, {"next_step_id": "advanced"})
+    result = await hass.config_entries.options.async_configure(
+        flow_id, {CONF_Z2M_BASE_TOPIC: "zigbee2mqtt/#"}
+    )
+    assert result["errors"] == {CONF_Z2M_BASE_TOPIC: "invalid_mqtt_topic"}
+    assert entry.options[CONF_Z2M_BASE_TOPIC] == "zigbee2mqtt2"
+
+    result = await hass.config_entries.options.async_configure(
+        flow_id, {CONF_Z2M_BASE_TOPIC: ""}
+    )
+    assert result["type"] == FlowResultType.MENU
+    await hass.async_block_till_done()
+    assert entry.runtime_data is coordinator
+    assert not any(topic.startswith("zigbee2mqtt2/") for topic in subscribed)
+    assert "zigbee2mqtt/bridge/state" in subscribed
+    assert coordinator.bridge_reader(STACK_Z2M).base_topic == "zigbee2mqtt"

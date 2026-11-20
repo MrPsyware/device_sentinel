@@ -58,6 +58,7 @@ BRIDGE_STATES = [BRIDGE_RUNNING, BRIDGE_BINDING, BRIDGE_DOWN, BRIDGE_UNKNOWN]
 # source. The interval holds steady: median 9.997 s, maximum 10.350 s,
 # standard deviation 0.082 s over 2,363 intervals (rule UP-02).
 BROKER_TOPIC_UPTIME = "$SYS/broker/uptime"
+CONF_EMQX_NODE = "emqx_node"
 BROKER_SCOPE = "mqtt"
 # Two arrivals before anything is claimed. A broker with $SYS
 # switched off, or one that words its payload differently, never
@@ -148,6 +149,7 @@ ATTR_BROKER_THRESHOLD = "threshold_seconds"
 ATTR_BROKER_TOPIC = "topic"
 
 Z2M_BASE_TOPIC_DEFAULT = "zigbee2mqtt"
+CONF_Z2M_BASE_TOPIC = "z2m_base_topic"
 Z2M_TOPIC_INFO = "bridge/info"
 Z2M_TOPIC_STATE = "bridge/state"
 # bridge/devices is the retained roll of what exists. It carries the

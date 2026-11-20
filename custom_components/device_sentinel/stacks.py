@@ -23,12 +23,14 @@ kept rather than sorted so the walk's behavior does not change.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from . import stack_matter, stack_z2m, stack_zha, stack_zwave
+from .const import CONF_Z2M_BASE_TOPIC, Z2M_BASE_TOPIC_DEFAULT
 
 # The one line of registration (rule STACK-01).
 STACK_MODULES = (stack_zha, stack_zwave, stack_matter, stack_z2m)
@@ -103,14 +105,27 @@ def radio_owner(domain: str, device: dr.DeviceEntry) -> str | None:
     return None
 
 
-def make_reader(stack: str, hass: HomeAssistant) -> Any | None:
-    """Return a bridge reader for a stack, or None if it has none.
+def make_reader(
+    stack: str,
+    hass: HomeAssistant,
+    options: Mapping[str, Any] | None = None,
+    *,
+    current: Any | None = None,
+) -> Any | None:
+    """Return a new bridge reader if one is needed.
 
     A stack that cannot report on its own liveness and pairing state
     returns None here and gets no reader, no subscription and no
     timer. That is what makes an absent or unbuilt stack cost
-    nothing at all.
+    nothing at all. Keep an existing reader while its settings match.
     """
+    if stack == stack_z2m.STACK:
+        base_topic = (options or {}).get(CONF_Z2M_BASE_TOPIC) or Z2M_BASE_TOPIC_DEFAULT
+        if current is None or current.base_topic != base_topic:
+            return stack_z2m.make_reader(hass, base_topic)
+        return None
+    if current is not None:
+        return None
     for module in STACK_MODULES:
         if module.STACK == stack:
             return module.make_reader(hass)

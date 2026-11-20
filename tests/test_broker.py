@@ -25,7 +25,12 @@ import json
 import pathlib
 from types import SimpleNamespace
 
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.device_sentinel import transport_mqtt
 from custom_components.device_sentinel.const import (
@@ -33,13 +38,15 @@ from custom_components.device_sentinel.const import (
     BROKER_RUNNING,
     BROKER_SCOPE,
     BROKER_UNKNOWN,
+    CONF_EMQX_NODE,
     DATA_BROKER_SEEN,
     DATA_SYSTEM_EVENTS,
     SYS_BROKER_DOWN,
     SYS_BROKER_UP,
     SYS_KIND,
 )
-from tests.helpers import setup_coordinator
+from custom_components.device_sentinel.sensor import DeviceSentinelBrokerSensor
+from tests.helpers import setup_coordinator, setup_entry
 
 FIXTURE = json.loads(
     (pathlib.Path(__file__).parent / "fixtures" / "broker_uptime.json")
@@ -70,6 +77,97 @@ def _feed(reader, rows, now_at=None):
     for row in rows:
         now_at(row["t"])
         reader._on_uptime(_msg(row["u"]))
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        (b"1234567", 1234.567),
+        ("2 days, 3 hours, 4 minutes, 5 seconds", 183845.0),
+        ("19 seconds", 19.0),
+        ("invalid", None),
+        ("-123", None),
+        ("inf", None),
+    ],
+)
+def test_emqx_uptime_is_normalized_to_seconds(payload, expected):
+    assert transport_mqtt._uptime_seconds(payload, emqx=True) == expected
+
+
+async def test_the_broker_sensor_monitors_the_configured_emqx_node(hass, monkeypatch):
+    mqtt_entry = MockConfigEntry(domain="mqtt", title="MQTT")
+    mqtt_entry.add_to_hass(hass)
+    mqtt_entry.mock_state(hass, ConfigEntryState.LOADED)
+    subscriptions = {}
+
+    async def wait_for_mqtt_client(_hass):
+        return True
+
+    async def subscribe(_hass, topic, receive):
+        subscriptions[topic] = receive
+        return lambda: subscriptions.pop(topic)
+
+    monkeypatch.setattr(transport_mqtt.mqtt, "async_wait_for_mqtt_client", wait_for_mqtt_client)
+    monkeypatch.setattr(transport_mqtt.mqtt, "async_subscribe", subscribe)
+    entry = await setup_entry(hass)
+    coordinator = entry.runtime_data
+    sensor = DeviceSentinelBrokerSensor(coordinator)
+    default_topic = "$SYS/broker/uptime"
+    assert set(subscriptions) == {default_topic}
+    coordinator.data[DATA_BROKER_SEEN] = {"state": BROKER_RUNNING, "started": 1.0}
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    flow_id = result["flow_id"]
+    await hass.config_entries.options.async_configure(flow_id, {"next_step_id": "advanced"})
+    result = await hass.config_entries.options.async_configure(
+        flow_id, {CONF_EMQX_NODE: "emqx@+"}
+    )
+    assert result["errors"] == {CONF_EMQX_NODE: "invalid_emqx_node"}
+    result = await hass.config_entries.options.async_configure(
+        flow_id, {CONF_EMQX_NODE: "emqx@broker"}
+    )
+    assert result["type"] == FlowResultType.MENU
+    await hass.async_block_till_done()
+    assert entry.runtime_data is coordinator
+    topic = "$SYS/brokers/emqx@broker/uptime"
+    assert set(subscriptions) == {topic}
+    assert sensor.extra_state_attributes["topic"] == topic
+
+    now = transport_mqtt.dt_util.utcnow().timestamp() + 300
+    clock = _Clock(monkeypatch, now)
+    monkeypatch.setattr(coordinator, "_in_startup_grace", lambda: False)
+    before = len(coordinator.data[DATA_SYSTEM_EVENTS])
+    assert sensor.native_value == BROKER_UNKNOWN
+    assert coordinator._sample_broker(now) == BROKER_UNKNOWN
+
+    receive = subscriptions[topic]
+    receive(SimpleNamespace(payload="1000000"))
+    clock.set(now + 10)
+    receive(SimpleNamespace(payload="1010000"))
+    assert sensor.native_value == BROKER_RUNNING
+    assert sensor.extra_state_attributes["uptime_seconds"] == 1010.0
+    assert coordinator._sample_broker(now + 10) == BROKER_RUNNING
+    assert len(coordinator.data[DATA_SYSTEM_EVENTS]) == before
+
+    clock.set(now + 80)
+    assert sensor.native_value == BROKER_DOWN
+    assert coordinator._sample_broker(now + 80) == BROKER_DOWN
+    clock.set(now + 90)
+    receive(SimpleNamespace(payload="5000"))
+    assert sensor.native_value == BROKER_RUNNING
+    assert coordinator._sample_broker(now + 90) == BROKER_RUNNING
+
+    clock.set(now + 150)
+    receive(SimpleNamespace(payload="2000"))
+    assert coordinator._sample_broker(now + 150) == BROKER_RUNNING
+    assert [event[SYS_KIND] for event in coordinator.data[DATA_SYSTEM_EVENTS][before:]] == [
+        SYS_BROKER_DOWN, SYS_BROKER_UP, SYS_BROKER_DOWN, SYS_BROKER_UP,
+    ]
+
+    await hass.config_entries.options.async_configure(flow_id, {"next_step_id": "advanced"})
+    await hass.config_entries.options.async_configure(flow_id, {CONF_EMQX_NODE: ""})
+    await hass.async_block_till_done()
+    assert set(subscriptions) == {default_topic}
+    assert sensor.native_value == BROKER_UNKNOWN
 
 
 class _Clock:

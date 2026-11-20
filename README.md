@@ -90,8 +90,8 @@ The hardware that has already run on real houses is listed in [TESTED_HARDWARE.m
 | **Battery** | Stable | Low batteries, and batteries falling or speeding up, predicting their time left. |
 | **Signal** | Experimental | Weak links shown on the dashboard; stuck readings alert. |
 | **Storage** | Hardened | Survives power cuts and restores itself from a backup. |
-| **Zigbee2MQTT** | Working | A bridge outage is one alert, and your re-pairs are never mistaken for faults. |
-| **MQTT** | Working | A broker outage is one alert, not one per device. |
+| **Zigbee2MQTT** | Working | A bridge outage is one alert, and re-pairs are recognized. Set **Zigbee2MQTT Base Topic** in Device Sentinel's **Advanced** settings if your bridge uses a custom `mqtt.base_topic`. |
+| **MQTT** | Working | Watches Mosquitto and EMQX. For EMQX, set **EMQX Node Name** in Device Sentinel's **Advanced** settings. Home Assistant's MQTT account needs subscribe access to `$SYS/brokers/<node>/uptime`. |
 | **ZHA** | Working | A coordinator outage is one alert, and your re-pairs are recognized. |
 | **WiFi** | Working | A Wi-Fi outage is one alert. Needs a wireless adapter on your server or a supported router. |
 | **Z-Wave** | Working | A node Z-Wave JS reports dead makes its device unavailable. |

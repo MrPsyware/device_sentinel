@@ -73,6 +73,7 @@ from .const import (
     BROKER_SCOPE,
     BROKER_TOPIC_UPTIME,
     BROKER_UNKNOWN,
+    CONF_EMQX_NODE,
     ATTR_BROKER_CADENCE,
     ATTR_BROKER_LAST_HEARD,
     ATTR_BROKER_STARTED,
@@ -223,6 +224,7 @@ _SEEN_PUSHED = "pushed"
 # And whether its down was told on the bus, which a down inside the
 # startup grace is not until the grace closes (rule UP-10).
 _SEEN_TOLD = "told"
+_SEEN_TOPIC = "topic"
 
 # The same four marks for each integration entry outage, keyed as the
 # outage is announced ("domain|entry_id"). The outage itself is resumed
@@ -321,7 +323,7 @@ class InterventionMixin:
     """Interventions and upstreams, mixed into the coordinator."""
 
     async def _start_broker_reader(self) -> None:
-        """Start the one broker watch, where MQTT is present at all.
+        """Start the broker watch or switch to the configured uptime topic.
 
         Independent of which stacks are detected: a house running
         Tasmota or ESPHome over MQTT and no Zigbee at all still has a
@@ -330,14 +332,24 @@ class InterventionMixin:
         starts anyway and reports unknown, which every consumer reads
         as no opinion.
         """
-        if self._broker_reader is not None:
+        if self._stopped:
             return
-        reader = MQTTBrokerReader(self.hass)
-        await reader.async_start()
+        reader = MQTTBrokerReader(
+            self.hass, emqx_node=self.entry.options.get(CONF_EMQX_NODE) or ""
+        )
+        if self._broker_reader is not None:
+            if reader.topic == self._broker_topic:
+                return
+            self._broker_reader.async_stop()
+            self.upstreams_loaded_after.pop(BROKER_LABEL, None)
+            self.upstreams_load_measured.pop(BROKER_LABEL, None)
         self._broker_reader = reader
+        await reader.async_start()
+        if self._broker_reader is not reader:
+            reader.async_stop()
 
-    async def _start_bridge_readers(self) -> None:
-        """Create and start a bridge reader for each capable stack.
+    async def _start_bridge_readers(self, *, reconfigure: bool = False) -> None:
+        """Start detected bridge readers or reconfigure existing readers.
 
         Which stacks can be read is the stack registry's question,
         not this file's (rule STACK-01): a stack with no reader returns
@@ -348,12 +360,22 @@ class InterventionMixin:
         something to read. The reader is kept regardless of whether it
         connected, because MQTT may come up after Device Sentinel.
         """
-        for stack in sorted(self._stacks):
-            if stack in self._bridge_readers:
-                continue
-            reader = make_reader(stack, self.hass)
+        if self._stopped:
+            return
+        stacks = self._bridge_readers.keys() if reconfigure else self._stacks
+        for stack in sorted(stacks):
+            previous = self._bridge_readers.get(stack)
+            reader = make_reader(
+                stack, self.hass, self.entry.options, current=previous
+            )
             if reader is None:
                 continue
+            if previous is not None:
+                clear = getattr(previous, "set_join_recorder", None)
+                if callable(clear):
+                    clear(None)
+                previous.async_stop()
+                self._bridge_down_pending.pop(stack, None)
             self._bridge_readers[stack] = reader
             # A reader that names the device joining while pairing is
             # open is told whom to tell, before it subscribes, so no
@@ -362,6 +384,13 @@ class InterventionMixin:
             if callable(give):
                 give(self._record_repaired)
             await reader.async_start()
+            # A save or unload can supersede this reader while MQTT subscribes.
+            if self._bridge_readers.get(stack) is not reader:
+                reader.async_stop()
+            if self._stopped:
+                return
+        if reconfigure:
+            return
 
         # The join observers. A pairing window opened from the Home
         # Assistant UI is invisible outside the process, so only code
@@ -661,10 +690,14 @@ class InterventionMixin:
         stored = self.data.setdefault(DATA_BROKER_SEEN, {})
         was = stored.get(BRIDGE_SEEN_STATE)
         known_start = stored.get("started")
+        topic = self._broker_topic
+        # A different source has a different boot time even when both are up.
+        same_topic = stored.get(_SEEN_TOPIC, BROKER_TOPIC_UPTIME) == topic
 
         restarted = (
             state == BROKER_RUNNING
             and was == BROKER_RUNNING
+            and same_topic
             and reader.regressed_since(known_start)
         )
         if restarted and not self._inside_unwatched(started):
@@ -759,8 +792,12 @@ class InterventionMixin:
         if (
             stored.get(BRIDGE_SEEN_STATE) != state
             or stored.get("started") != started
+            or not same_topic
         ):
             stored[BRIDGE_SEEN_STATE] = state
+            if not same_topic:
+                stored[_SEEN_TOPIC] = topic
+                stored.pop("started", None)
             if started is not None:
                 stored["started"] = started
             self._dirty = True
@@ -1784,7 +1821,10 @@ class InterventionMixin:
             BROKER_RUNNING, BROKER_DOWN
         ):
             return False
-        return self._broker_reader is not None
+        return (
+            self._broker_reader is not None
+            and stored.get(_SEEN_TOPIC, BROKER_TOPIC_UPTIME) == self._broker_topic
+        )
 
     def _upstreams_still_starting(self) -> set[str]:
         """Upstreams reading down that have not loaded in this run."""
@@ -1798,8 +1838,9 @@ class InterventionMixin:
         if BROKER_LABEL not in self.upstreams_loaded_after:
             reader = self._broker_reader
             stored = self.data.get(DATA_BROKER_SEEN) or {}
-            heard_before = stored.get(BRIDGE_SEEN_STATE) in (
-                BROKER_RUNNING, BROKER_DOWN
+            heard_before = (
+                stored.get(_SEEN_TOPIC, BROKER_TOPIC_UPTIME) == self._broker_topic
+                and stored.get(BRIDGE_SEEN_STATE) in (BROKER_RUNNING, BROKER_DOWN)
             )
             # Down, or silent all run while the house knows it
             # publishes: either way its devices wait with it
@@ -2189,6 +2230,11 @@ class InterventionMixin:
         return None
 
     @property
+    def _broker_topic(self) -> str:
+        """Return the current uptime source."""
+        return getattr(self._broker_reader, "topic", BROKER_TOPIC_UPTIME)
+
+    @property
     def broker_state(self) -> str:
         """Return the broker's state for the sensor and diagnostics."""
         reader = self._broker_reader
@@ -2203,7 +2249,7 @@ class InterventionMixin:
     def broker_attributes(self) -> dict[str, Any]:
         """Return what the broker sensor publishes beside its state."""
         reader = self._broker_reader
-        attributes: dict[str, Any] = {ATTR_BROKER_TOPIC: BROKER_TOPIC_UPTIME}
+        attributes: dict[str, Any] = {ATTR_BROKER_TOPIC: self._broker_topic}
         if reader is None:
             return attributes
         try:
