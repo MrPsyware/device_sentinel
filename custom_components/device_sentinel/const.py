@@ -3,7 +3,7 @@
 # Device Sentinel - a Home Assistant custom integration from The Thinking Home (xeazy.com)
 #   Article: https://xeazy.com/reliable-home-assistant-dead-sensor-detection/
 #   Repository: https://github.com/TheThinkingHome/device_sentinel
-# File: const.py, Version: 0.29.8 (2026-11-19)
+# File: const.py, Version: 0.30.1 (2026-11-21)
 
 """Constants for the Device Sentinel integration."""
 
@@ -93,7 +93,7 @@ BROKER_STATES = [BROKER_RUNNING, BROKER_DOWN, BROKER_UNKNOWN]
 # a module runs top to bottom. One copy of the string: the problem list
 # resolves Wi-Fi through that map and the sensor reads it directly, and
 # the two must not drift apart.
-WIFI_DISPLAY_NAME = "WiFi"
+WIFI_DISPLAY_NAME = "Wi-Fi"
 
 # Integrations whose devices reach Home Assistant only through the MQTT
 # broker without being MQTT's own devices. The MQTT integration's page
@@ -1165,7 +1165,10 @@ DAILY_MAX_KEEP = 14
 # differently for no reason anyone chose. Retention is how much history
 # is kept, which judges nothing.
 CONF_RETENTION_DAYS = "history_days"
-DEFAULT_RETENTION_DAYS = 90
+# Six months: room for a battery's daily curve. An upgraded house that
+# kept less is raised to it, and one that kept more keeps its own
+# (rule STOR-14).
+DEFAULT_RETENTION_DAYS = 180
 RETENTION_DAYS_MIN = 30
 RETENTION_DAYS_MAX = 360
 RETENTION_DAYS_STEP = 30
@@ -1504,6 +1507,25 @@ EVIDENCE_TEMPERATURE_RANGE = (-50.0, 80.0)
 # One row per battery replaced, for the house, kept for good (rule BAT-08).
 DATA_BATTERY_LIVES = "battery_lives"
 BATTERY_LIVES_KEEP = 5000
+# Each battery's weekly summary, kept for good in the history file, never
+# trimmed by How Much History to Keep, so a battery of any length keeps
+# its whole shape: device id -> rows (rule BAT-20). Ten years a device.
+DATA_BATTERY_WEEKS = "battery_weeks"
+BATTERY_WEEKS_KEEP = 520
+# Each device's newest good, full battery curve, kept when the battery
+# ends: device id -> curve (rule BAT-20).
+DATA_BATTERY_CURVES = "battery_curves"
+BATTERY_CURVES_KEEP = 2000
+# A curve is kept when its start was seen and it has readings in at least
+# this share of its weeks: four of every five (rule BAT-20).
+CURVE_WEEKS_SHARE = 0.8
+# The daily detail kept at a curve's end, where its fall is steepest: the
+# forecast's own window (rule BAT-20).
+CURVE_TAIL_DAYS = 42
+# A battery whose device went silent this many days before the
+# replacement ran out; one replaced while still reporting was stopped
+# early (rule BAT-20).
+CURVE_RAN_OUT_DAYS = 2
 # The house's tally of forecasts to empty, kept apart from the tally of
 # forecasts to the threshold, so each says how good its own are (rule
 # BAT-15).
@@ -1603,13 +1625,34 @@ CLIP_SPREAD_FLOOR = 0.15
 TRIM_MIN_SAMPLES = 7
 
 # Battery detection judges the level only; liveness is the freeze
-# detector's. The threshold is a setting, so a person can slide it above
-# a real cell's level to see detection work (rule BAT-03).
-CONF_LOW_THRESHOLD = "low_threshold"
-# Fifteen by default. An entry that never stored a value keeps twenty
-# through the migration, so nobody's alerts change without them asking
+# detector's. Each battery type has its own low line, a setting, so a
+# person can slide it above a real cell's level to see detection work
 # (rule BAT-03).
-DEFAULT_LOW_THRESHOLD = 15
+CONF_LOW_THRESHOLD_ALKALINE = "low_threshold_alkaline"
+CONF_LOW_THRESHOLD_LITHIUM = "low_threshold_lithium"
+CONF_LOW_THRESHOLD_RECHARGEABLE = "low_threshold_rechargeable"
+# An alkaline cell has weeks left at 10%. A lithium cell, and any
+# battery whose type is not known, holds near full and then falls
+# fast, so 20%; a rechargeable is charged at 20% (rule BAT-03).
+DEFAULT_LOW_THRESHOLD_ALKALINE = 10
+DEFAULT_LOW_THRESHOLD_LITHIUM = 20
+DEFAULT_LOW_THRESHOLD_RECHARGEABLE = 20
+BATTERY_GROUP_ALKALINE = "alkaline"
+BATTERY_GROUP_LITHIUM = "lithium"
+BATTERY_GROUP_RECHARGEABLE = "rechargeable"
+LOW_THRESHOLD_KEYS = {
+    BATTERY_GROUP_ALKALINE: (CONF_LOW_THRESHOLD_ALKALINE, DEFAULT_LOW_THRESHOLD_ALKALINE),
+    BATTERY_GROUP_LITHIUM: (CONF_LOW_THRESHOLD_LITHIUM, DEFAULT_LOW_THRESHOLD_LITHIUM),
+    BATTERY_GROUP_RECHARGEABLE: (CONF_LOW_THRESHOLD_RECHARGEABLE, DEFAULT_LOW_THRESHOLD_RECHARGEABLE),
+}
+# A coin cell that reports its voltage is also low at or below this,
+# its resting voltage, near where the cliff starts, and clears above it
+# by the margin (rule BAT-03).
+LITHIUM_LOW_VOLTS = 2.9
+LITHIUM_CLEAR_VOLTS = 0.05
+# The single threshold every type shared, kept for the migration that
+# set it and the setup that retires it (rule STOR-19).
+CONF_LOW_THRESHOLD = "low_threshold"
 LEGACY_LOW_THRESHOLD = 20
 
 # The option keys step 4 of the migration removes, each now a constant
@@ -2342,7 +2385,7 @@ UPSTREAM_WIFI = "wifi"
 # inside sixty seconds, and ordinary churn never exceeded three, once, in
 # a wobble after a restart that the hold absorbed.
 WIFI_KEY = "wifi"
-WIFI_SENSOR_NAME = "Bridge: WiFi"
+WIFI_SENSOR_NAME = "Bridge: Wi-Fi"
 # The dashboard's status band says it as people write it.
 WIFI_BAND_NAME = "Wi-Fi"
 # How many tied trackers falling together declares an outage (rule
@@ -2910,6 +2953,10 @@ SYS_MAINTENANCE_OPEN = "maintenance_open"
 SYS_MAINTENANCE_CLOSED = "maintenance_closed"
 SYS_EPOCH_RESET = "epoch_reset"
 SYS_OPTIONS_CHANGED = "options_changed"
+# A change an upgrade made to the person's settings, told once in the
+# Daily Brief as a breaking change (rule BRIEF-17).
+SYS_SETTINGS_CHANGED = "settings_changed"
+SETTINGS_BATTERY_BY_TYPE = "battery_by_type"
 # A person acted on a device from its page: renamed it, moved it,
 # labelled it, switched on its Last Seen, or muted it (rule DASH-09). The
 # one system event that names a device, so the brief puts it on that
@@ -3301,6 +3348,9 @@ CONF_MUTED_INTEGRATIONS = "muted_integrations"
 # SIG-13). Left in stored options, each would read as a live setting in
 # every diagnostics download.
 DEAD_OPTION_KEYS = (
+    # One threshold for every battery type, replaced by one for each
+    # (rule BAT-03).
+    "low_threshold",
     "excluded_areas",
     "notify_targets",
     "quiet_start",
@@ -3329,7 +3379,7 @@ DEAD_OPTION_KEYS = (
 # changes on an upgraded house. An integration's freeze mute stays
 # freeze only: Home Assistant reports a device unavailable well, and a
 # freeze mute hiding it would be a fault (rule MUTE-06).
-OPTIONS_MINOR_VERSION = 7
+OPTIONS_MINOR_VERSION = 8
 
 # Step 3's rename: the ignore list takes the exclude spelling.
 IGNORE_KEY_RENAMES = {

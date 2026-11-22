@@ -3,7 +3,7 @@
 # Device Sentinel - a Home Assistant custom integration from The Thinking Home (xeazy.com)
 #   Article: https://xeazy.com/reliable-home-assistant-dead-sensor-detection/
 #   Repository: https://github.com/TheThinkingHome/device_sentinel
-# File: diagnostics.py, Version: 0.29.8 (2026-11-19)
+# File: diagnostics.py, Version: 0.30.1 (2026-11-21)
 
 """Diagnostics support for the Device Sentinel integration.
 
@@ -636,6 +636,18 @@ def names_shared(entry: Any) -> bool:
     return bool((entry.options or {}).get(CONF_SHARE_NAMES, DEFAULT_SHARE_NAMES))
 
 
+async def _wifi_adapters(coordinator: Any) -> dict[str, Any] | None:
+    """The adapter read, or None where it fails: a download never breaks
+    on it (rule STOR-21)."""
+    read = getattr(coordinator, "async_adapter_diagnostics", None)
+    if read is None:
+        return None
+    try:
+        return await read()
+    except Exception:  # noqa: BLE001 - the download always comes
+        return None
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: DeviceSentinelConfigEntry
 ) -> dict[str, Any]:
@@ -761,7 +773,7 @@ async def _learned_state(
             # hold anything (rules DEV-19, STOR-21).
             "has_note": coordinator.device_note(device_id) is not None,
             # Weekly averages and the trend read from them (rule BAT-18).
-            "battery_trend": coordinator.battery_trend_summary(record),
+            "battery_trend": coordinator.battery_trend_summary(record, device_id),
             # What powers it and where that came from (rule DEV-06).
             "power": coordinator.power_diagnostics(device_id),
             # What it is and where that came from (rule DEV-10).
@@ -831,6 +843,9 @@ async def _learned_state(
             "battery_empty_tally": coordinator.data.get(DATA_BATTERY_EMPTY_TALLY),
             # Each battery replaced, for a later survival model (rule BAT-08).
             "battery_lives": coordinator.battery_lives_view() if isinstance(coordinator.data.get(DATA_BATTERY_LIVES), list) else [],
+            # Each battery's weeks, each device's newest good curve, and one
+            # combined curve per make and model (rule BAT-20).
+            "battery_curves": coordinator.battery_curves_view(),
             # The version that last wrote this file, so an upgrade
             # start is verifiable from a download (rule STOR-19).
             "last_version": coordinator.data.get(DATA_LAST_VERSION),
@@ -860,7 +875,8 @@ async def _learned_state(
             "trim_top_k": TRIM_TOP_K,
             "trim_min_samples": TRIM_MIN_SAMPLES,
             "signal_arming_days": SIGNAL_ARMING_DAYS,
-            "battery_low_threshold": coordinator.low_threshold,
+            # Each battery type's low line (rule BAT-03).
+            "battery_low_thresholds": coordinator.low_thresholds,
             "battery_clear_margin": BATTERY_CLEAR_MARGIN,
         },
         "classification": {
@@ -904,6 +920,9 @@ async def _learned_state(
             "broker_state": coordinator.broker_state,
             "wifi": coordinator.wifi_diagnostics,
             "wifi_scan": _wifi_scan_hidden(coordinator.wifi_scan_diagnostics, _network_names(coordinator), book),
+            # Why the server can or cannot watch Wi-Fi: every wireless
+            # adapter, the one in use, and the hardware (rule UP-12).
+            "wifi_adapters": await _wifi_adapters(coordinator),
             # The channel each network uses and every network the server
             # heard at its last scan, with the cards they make (rules
             # SIG-19, REC-13). Each name is a stand-in under its "ssid"

@@ -3,7 +3,7 @@
 # Device Sentinel - a Home Assistant custom integration from The Thinking Home (xeazy.com)
 #   Article: https://xeazy.com/reliable-home-assistant-dead-sensor-detection/
 #   Repository: https://github.com/TheThinkingHome/device_sentinel
-# File: tests/test_config_screens.py, Version: 0.28.2 (2026-11-04)
+# File: tests/test_config_screens.py, Version: 0.30.0 (2026-11-21)
 
 """What the configuration screens promise a person reading them (rules
 CFG-01, CFG-02, CFG-05).
@@ -39,7 +39,7 @@ from custom_components.device_sentinel.const import (
     CONF_MUTED_INTEGRATIONS,
     CONF_MUTED_LABELS,
     CONF_EXCLUDED_INTEGRATIONS,
-    CONF_LOW_THRESHOLD,
+    CONF_LOW_THRESHOLD_ALKALINE,
     CONF_Z2M_BASE_TOPIC,
     STACK_Z2M,
 )
@@ -155,7 +155,7 @@ async def test_a_section_saves_and_returns_to_the_menu(
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
-            CONF_LOW_THRESHOLD: 33,
+            CONF_LOW_THRESHOLD_ALKALINE: 33,
             "battery_muting": {
                 CONF_BATTERY_MUTED_INTEGRATIONS: [],
                 CONF_BATTERY_MUTED_LABELS: [],
@@ -166,7 +166,7 @@ async def test_a_section_saves_and_returns_to_the_menu(
     await hass.async_block_till_done()
 
     assert result["type"] is FlowResultType.MENU
-    assert entry.options[CONF_LOW_THRESHOLD] == 33
+    assert entry.options[CONF_LOW_THRESHOLD_ALKALINE] == 33
 
 
 async def test_two_sections_in_one_visit_both_stick(hass: HomeAssistant):
@@ -185,7 +185,7 @@ async def test_two_sections_in_one_visit_both_stick(hass: HomeAssistant):
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
-            CONF_LOW_THRESHOLD: 22,
+            CONF_LOW_THRESHOLD_ALKALINE: 22,
             "battery_muting": {
                 CONF_BATTERY_MUTED_INTEGRATIONS: [],
                 CONF_BATTERY_MUTED_LABELS: [],
@@ -194,7 +194,7 @@ async def test_two_sections_in_one_visit_both_stick(hass: HomeAssistant):
         },
     )
     await hass.async_block_till_done()
-    assert entry.options[CONF_LOW_THRESHOLD] == 22
+    assert entry.options[CONF_LOW_THRESHOLD_ALKALINE] == 22
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"next_step_id": "exclusions"}
@@ -216,7 +216,7 @@ async def test_two_sections_in_one_visit_both_stick(hass: HomeAssistant):
 
     assert result["type"] is FlowResultType.MENU
     assert entry.options[CONF_EXCLUDED_INTEGRATIONS] == ["ping"]
-    assert entry.options[CONF_LOW_THRESHOLD] == 22
+    assert entry.options[CONF_LOW_THRESHOLD_ALKALINE] == 22
 
 
 async def test_the_menu_says_a_section_saves_on_submit(
@@ -272,7 +272,7 @@ async def test_the_excludes_live_in_a_section_and_store_flat(
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
-            CONF_LOW_THRESHOLD: 25,
+            CONF_LOW_THRESHOLD_ALKALINE: 25,
             "battery_muting": {
                 CONF_BATTERY_MUTED_INTEGRATIONS: ["mqtt"],
                 CONF_BATTERY_MUTED_LABELS: [],
@@ -299,7 +299,9 @@ async def test_every_sectioned_screen_keeps_its_settings_loose(
     """
     entry = await setup_entry(hass)
     expected = {
-        "battery": (("battery_muting",), 2),
+        # Three low lines, one per battery type, and the warning days
+        # (rule BAT-03).
+        "battery": (("battery_muting",), 4),
         # Four bad-day settings and the Short Drop-Out Limit (rule SIG-16).
         "signal": (("signal_muting",), 5),
         "freeze": (("freeze_muting", "unavailable_muting"), 2),

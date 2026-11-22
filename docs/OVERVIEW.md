@@ -2,14 +2,14 @@
 
 # Device Sentinel
 
-![Tests](https://github.com/TheThinkingHome/device_sentinel/actions/workflows/test.yml/badge.svg)
-![Validate](https://github.com/TheThinkingHome/device_sentinel/actions/workflows/validate.yml/badge.svg)
-![Lint](https://github.com/TheThinkingHome/device_sentinel/actions/workflows/lint.yml/badge.svg)
-![CodeQL](https://github.com/TheThinkingHome/device_sentinel/actions/workflows/codeql.yml/badge.svg)
-![Version](https://img.shields.io/github/v/release/TheThinkingHome/device_sentinel)
-![License](https://img.shields.io/github/license/TheThinkingHome/device_sentinel)
-![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)
-
+![Stars](https://img.shields.io/github/stars/TheThinkingHome/device_sentinel?label=Stars&color=41BDF5&logo=github)
+![Active Installs](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json&query=%24.device_sentinel.total&label=Active%20Installs&color=41BDF5&logo=home-assistant&logoColor=white)
+![Version](https://img.shields.io/github/v/release/TheThinkingHome/device_sentinel?label=Version&color=41BDF5)
+![License](https://img.shields.io/github/license/TheThinkingHome/device_sentinel?label=License&color=41BDF5)
+![Tests](https://img.shields.io/github/actions/workflow/status/TheThinkingHome/device_sentinel/test.yml?branch=main&label=Tests)
+![Validate](https://img.shields.io/github/actions/workflow/status/TheThinkingHome/device_sentinel/validate.yml?branch=main&label=Validate)
+![Lint](https://img.shields.io/github/actions/workflow/status/TheThinkingHome/device_sentinel/lint.yml?branch=main&label=Lint)
+![CodeQL](https://img.shields.io/github/actions/workflow/status/TheThinkingHome/device_sentinel/codeql.yml?branch=main&label=CodeQL)
 
 **Your dashboard cannot tell a quiet device from a dead one. Device Sentinel can, and it catches failing batteries and dropping radio links before they take your smart home down.**
 
@@ -18,7 +18,7 @@ To install Device Sentinel, get help or report an issue, see the [README](../REA
 &nbsp;
 &nbsp;
 
-![A motion sensor that stopped reporting: it usually reports every 20 minutes, and Device Sentinel calls it frozen after 64 minutes of silence](https://raw.githubusercontent.com/TheThinkingHome/device_sentinel/main/docs/images/Device%20Detail%20Motion%20Bath%20-%20Frozen.png)
+![A door sensor that stopped reporting: it usually reports about once an hour, and Device Sentinel calls it frozen after 2.4 hours of silence](https://raw.githubusercontent.com/TheThinkingHome/device_sentinel/main/docs/images/Device%20Detail%20-%20Door%20Laundry%20Frozen.png)
 
 &nbsp;
 &nbsp;
@@ -31,6 +31,10 @@ Home Assistant only reacts to what your devices tell it. When a device quietly d
 * A door sensor dies while the door is closed. Your security automations happily believe that door is secure, indefinitely.
 * The batteries in your smart lock have been draining for a month. Nothing warns you until you are standing outside, locked out.
 
+It happened in our own laundry room on 20 November 2026. The door stood open, and Home Assistant said it was closed. The sensor had last reported at 1:30 PM. Device Sentinel reported it frozen at 3:54 PM. Three hours later, Zigbee2MQTT still showed it online, because it waits 25 hours before it calls a battery device offline.
+
+![Zigbee2MQTT at 5:29 PM with the door open: battery 100%, last seen 3 hours ago, still online](https://raw.githubusercontent.com/TheThinkingHome/device_sentinel/main/docs/images/Zigbee2MQTT%20-%20Door%20Laundry%20Still%20Online.png)
+
 The early warning signs are usually there, in battery levels and radio signal data, but nobody acts on them, because a battery reading of 20% means "two weeks left" on one device and "dead this afternoon" on another. 
 
 ## The Solution
@@ -41,7 +45,7 @@ There are no watch lists to maintain and no arbitrary timeouts to assign. A chat
 
 Device Sentinel applies the same logic to your batteries and radio links. A radio link is judged against the baseline *that specific device* normally holds. A battery is judged twice: once against a flat level you choose, and again against how fast it is actually draining. 
 
-If a battery is projected to reach empty inside your chosen horizon, say thirty days, Device Sentinel reports it, even if it still reads 80%.
+If a battery is projected to reach empty inside your chosen horizon, say thirty days, Device Sentinel reports it before it reaches your low threshold.
 
 ### What It Catches
 
@@ -49,12 +53,12 @@ If a battery is projected to reach empty inside your chosen horizon, say thirty 
 |---|---|
 | **Frozen** | Silent while still showing a healthy value. Your automations are acting on a dead reading. |
 | **Unavailable** | Home Assistant knows it's gone. You probably don't. |
-| **Flapping** | Drops out and comes back again and again. One alert, not dozens. |
+| **Short drop-outs** | Becomes unavailable for a few minutes and recovers, again and again. One alert, not dozens. |
 | **Never reported** | Devices that have never sent a reading, including ones that died before you installed Device Sentinel. |
-| **Low or falling battery** | Warned while you can still act, even when a coin cell still reads 80%. |
+| **Low or falling battery** | Warned while you can still act, before it reaches your low threshold. |
 | **Weak or stuck signal** | Links degrade before they fail. |
 
-![A device's battery over three months, with the weekly reading beside it](https://raw.githubusercontent.com/TheThinkingHome/device_sentinel/main/docs/images/Battery%20Accelerating%20-%20Door%202nd%20Bedroom.png)
+![A door sensor's battery over 132 days: falling about 1.5 points a week, now under its 15% threshold, with about 5 to 7 weeks left](https://raw.githubusercontent.com/TheThinkingHome/device_sentinel/main/docs/images/Battery%20Chart%20-%20Below%20Threshold.png)
 
 ![The same device's radio link against its own normal and its bad-day line](https://raw.githubusercontent.com/TheThinkingHome/device_sentinel/main/docs/images/Signal%20Failing%20-%20Temperature%20Living%20Room.png)
 
@@ -69,6 +73,8 @@ Every fault lands in one Home Assistant to-do list. A device that is both frozen
 **One Alert When a Coordinator, Broker or Wi-Fi Network Goes Down**
 When a coordinator, broker, or Wi-Fi network goes down, every device behind it goes quiet. Device Sentinel reports the one failure you can fix, rather than giving you sixty separate alerts for sixty silent devices. When it comes back, Device Sentinel gives each device time to rejoin, then reports only the ones that didn't. 
 
+![The Networks tab: the Wi-Fi networks the server hears beside the Zigbee channels, and each network with its devices and last outage](https://raw.githubusercontent.com/TheThinkingHome/device_sentinel/main/docs/images/Device%20Detail%20-%20Network%20Tab.png)
+
 **A Dashboard in Your Sidebar**
 The daily brief, the problem list, battery and signal trends, and each device's own page, one click apart. Every device has a type, such as Leak Sensor, Plug or Camera, so you can look at all your door sensors at once, and a recommendations tab lists what you can set right there. Administrators only.
 
@@ -77,7 +83,7 @@ Live push notifications are sent for real faults, and quiet hours keep your phon
 
 Every screen and setting is explained in the [wiki](https://github.com/TheThinkingHome/device_sentinel/wiki).
 
-![A Device Sentinel daily brief as it arrives by email, listing the devices that need attention and what happened over the last day](https://raw.githubusercontent.com/TheThinkingHome/device_sentinel/main/docs/images/Device%20Sentinel%20Daily%20Brief%20Hard%20Copy.png)
+![The Daily Brief tab: today's Problem List, worst first, with Repeat Offenders and what happened since midnight](https://raw.githubusercontent.com/TheThinkingHome/device_sentinel/main/docs/images/Device%20Detail%20-%20Daily%20Brief.png)
 
 ## Installation
 
